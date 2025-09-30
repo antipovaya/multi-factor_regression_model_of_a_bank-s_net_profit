@@ -145,9 +145,9 @@ date_102 = ''
 for el in data:
     if el['date'] > '2022-12-01':
         date_from_data = el['date']
-        url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_from_data
-        response = session.get(url_102, headers=headers)
-        soup_102 = BeautifulSoup(response.text, "html.parser")
+        # url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_from_data
+        # response = session.get(url_102, headers=headers)
+        # soup_102 = BeautifulSoup(response.text, "html.parser")
         pass
         #вызываем функцию от даты с периодом 1
         #считаем х и записываем в дату
@@ -158,11 +158,11 @@ for el in data:
 # А ВООБЩЕ ПРОЩЕ ДАТУ ФИЛЬРОВАТЬ В ФУНКЦИИ
 
 
-def search_for_102(soup_102, date_from_data, search_string):
+def search_for_102(soup_102, date_from_data, search_string_1_period, search_string_2_period):
     if date_from_data > '2022-12-01':
         if soup_102.find_all('tr'):
             # Находим строку с заголовком раздела
-            header_row = soup_102.find('td', string=re.compile({search_string}))
+            header_row = soup_102.find('td', string=search_string_1_period)
             if header_row:
                 # Переходим к родительской строке и затем к следующей строке
                 header_tr = header_row.find_parent('tr')
@@ -185,7 +185,7 @@ def search_for_102(soup_102, date_from_data, search_string):
                                 # Очищаем текст от форматирования
                                 value = last_cell.text.replace('&nbsp;', '').replace(' ', '')
     else:
-        target_td = soup_102.find('td', string='Итого по разделу 1')
+        target_td = soup_102.find('td', string=search_string_2_period)
         if target_td:
             print(target_td, date_102, 'target_td')
             header_row = target_td.parent

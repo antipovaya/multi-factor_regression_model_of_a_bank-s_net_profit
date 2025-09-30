@@ -4,6 +4,8 @@ from fake_useragent import UserAgent  # pip install fake_useragent
 from pprint import pprint
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import re
+
 
 ua = UserAgent()
 
@@ -73,7 +75,7 @@ def search_for_101(soup_101, list_of_accounts):
             if last_non_empty_cell:
                  # Извлекаем и очищаем текст
                 raw_text = last_non_empty_cell.text
-                print(int(raw_text.replace(' ', '').replace('\xa0', '').replace(' ', '')))
+                # print(int(raw_text.replace(' ', '').replace('\xa0', '').replace(' ', '')))
                 amount_of_accounts.append(int(raw_text.replace(' ', '').replace('\xa0', '').replace(' ', '')))
 
     return sum(map(int, amount_of_accounts))
@@ -137,4 +139,67 @@ for link in filtered_href:
         "x6": 0,
         "x7": 0,
         "y": 0})
+    print(data)
+
+date_102 = ''
+for el in data:
+    if el['date'] > '2022-12-01':
+        date_from_data = el['date']
+        url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_from_data
+        response = session.get(url_102, headers=headers)
+        soup_102 = BeautifulSoup(response.text, "html.parser")
+        pass
+        #вызываем функцию от даты с периодом 1
+        #считаем х и записываем в дату
+    elif el['date'] <= '2022-12-01':
+        pass
+        # вызываем функцию от даты с периодом 2
+        # считаем х и записываем в дату
+# А ВООБЩЕ ПРОЩЕ ДАТУ ФИЛЬРОВАТЬ В ФУНКЦИИ
+
+
+def search_for_102(soup_102, date_from_data, search_string):
+    if date_from_data > '2022-12-01':
+        if soup_102.find_all('tr'):
+            # Находим строку с заголовком раздела
+            header_row = soup_102.find('td', string=re.compile({search_string}))
+            if header_row:
+                # Переходим к родительской строке и затем к следующей строке
+                header_tr = header_row.find_parent('tr')
+                # Что делает find_parent():
+                # Находит родительский элемент указанного типа
+                # 'tr' - ищет родительский тег < tr >
+                # Возвращает всю строку таблицы, содержащую найденную ячейку
+                if header_tr:
+                    next_row = header_tr.find_next_sibling('tr')
+                    # Что делает find_next_sibling():
+                    # Находит следующий элемент того же уровня
+                    # 'tr' - ищет следующий тег < tr >
+                    # Возвращает следующую строку таблицы
+                    if next_row:
+                        # Извлекаем числовое значение из последней ячейки
+                        cells = next_row.find_all('td', class_='right')
+                        if cells:
+                            last_cell = cells[-1]
+                            if last_cell.text.strip():
+                                # Очищаем текст от форматирования
+                                value = last_cell.text.replace('&nbsp;', '').replace(' ', '')
+    else:
+        target_td = soup_102.find('td', string='Итого по разделу 1')
+        if target_td:
+            print(target_td, date_102, 'target_td')
+            header_row = target_td.parent
+
+        else:
+            print("не найдено", date_102)
+            # # Метод.parent в BeautifulSoup возвращает родительский элемент текущего тега.
+            # # soup.find('td', class_='hover', string='Итого по разделу 1') - находит элемент < td > с нужным текстом
+            # # .parent - поднимается на один уровень вверх по дереву к родительскому элементу
+            # # Извлекаем все числовые ячейки в строке
+        if header_row:
+            header_td = header_row.find_all('td', class_='right')
+            # Берём последнюю ячейку и получаем текст
+            value = header_td[-1].get_text(strip=True).replace('&nbsp;', '').replace(' ', '')
+
+    return value
 

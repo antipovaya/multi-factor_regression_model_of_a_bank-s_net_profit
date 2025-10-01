@@ -5,7 +5,7 @@ from pprint import pprint
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import re
-
+import pandas as pd
 
 ua = UserAgent()
 
@@ -141,24 +141,45 @@ for link in filtered_href:
         "y": 0})
     print(data)
 
-date_102 = ''
-for el in data:
-    if el['date'] > '2022-12-01':
-        date_from_data = el['date']
-        # url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_from_data
-        # response = session.get(url_102, headers=headers)
-        # soup_102 = BeautifulSoup(response.text, "html.parser")
-        pass
-        #вызываем функцию от даты с периодом 1
-        #считаем х и записываем в дату
-    elif el['date'] <= '2022-12-01':
-        pass
-        # вызываем функцию от даты с периодом 2
-        # считаем х и записываем в дату
-# А ВООБЩЕ ПРОЩЕ ДАТУ ФИЛЬРОВАТЬ В ФУНКЦИИ
+
+def search_for_102_y(soup_102, search_string):
+    value = 0
+    value_positive = 0
+    value_negative = 0
+    if soup_102.find_all('tr'):
+            # Находим строку с заголовком раздела
+            # 1. Финансовый результат после налогообложения
+        header_row = soup_102.find('td', string=search_string)
+        if header_row:
+                # Переходим к родительской строке и затем к следующей строке
+            header_tr = header_row.find_parent('tr')
+            if header_tr:
+                next_row = header_tr.find_next_sibling('tr')
+                if next_row:
+                        # Извлекаем числовое значение из последней ячейки
+                    cells = next_row.find_all('td', class_='right')
+                    if cells:
+                        last_cell = cells[-1]
+                        if last_cell.text.strip():
+                                # Очищаем текст от форматирования
+                            value_positive = int(last_cell.text.replace('&nbsp;', '').replace(' ', '').replace('\xa0', ''))
+                    next_next_row = next_row.find_next_sibling('tr')
+                    if next_next_row:
+                        cells = next_next_row.find_all('td', class_='right')
+                        if cells:
+                            last_cell = cells[-1]
+                            if last_cell.text.strip():
+                                    # Очищаем текст от форматирования
+                                value_negative = int(last_cell.text.replace('&nbsp;', '').replace(' ', '').replace(
+                                        '\xa0', ''))
+                                value = value_positive - value_negative
+    return value
 
 
-def search_for_102(soup_102, date_from_data, search_string_1_period, search_string_2_period):
+def search_for_102(soup_102, date_from_data, search_string_1_period, search_string_2_period, chapter):
+    # Инициализируем value значением по умолчанию
+    value = 0
+
     if date_from_data > '2022-12-01':
         if soup_102.find_all('tr'):
             # Находим строку с заголовком раздела
@@ -166,16 +187,8 @@ def search_for_102(soup_102, date_from_data, search_string_1_period, search_stri
             if header_row:
                 # Переходим к родительской строке и затем к следующей строке
                 header_tr = header_row.find_parent('tr')
-                # Что делает find_parent():
-                # Находит родительский элемент указанного типа
-                # 'tr' - ищет родительский тег < tr >
-                # Возвращает всю строку таблицы, содержащую найденную ячейку
                 if header_tr:
                     next_row = header_tr.find_next_sibling('tr')
-                    # Что делает find_next_sibling():
-                    # Находит следующий элемент того же уровня
-                    # 'tr' - ищет следующий тег < tr >
-                    # Возвращает следующую строку таблицы
                     if next_row:
                         # Извлекаем числовое значение из последней ячейки
                         cells = next_row.find_all('td', class_='right')
@@ -183,23 +196,117 @@ def search_for_102(soup_102, date_from_data, search_string_1_period, search_stri
                             last_cell = cells[-1]
                             if last_cell.text.strip():
                                 # Очищаем текст от форматирования
-                                value = last_cell.text.replace('&nbsp;', '').replace(' ', '')
+                                value = last_cell.text.replace('&nbsp;', '').replace(' ', '').replace('\xa0', '')
     else:
-        target_td = soup_102.find('td', string=search_string_2_period)
-        if target_td:
-            print(target_td, date_102, 'target_td')
-            header_row = target_td.parent
+        section_header = soup_102.find('td', string=chapter)
+        if section_header:
+            section_tr = section_header.find_parent('tr')
+            if section_tr:
+                # Ищем все последующие строки после заголовка раздела
+                current_row = section_tr
+                found_total = False
 
-        else:
-            print("не найдено", date_102)
-            # # Метод.parent в BeautifulSoup возвращает родительский элемент текущего тега.
-            # # soup.find('td', class_='hover', string='Итого по разделу 1') - находит элемент < td > с нужным текстом
-            # # .parent - поднимается на один уровень вверх по дереву к родительскому элементу
-            # # Извлекаем все числовые ячейки в строке
-        if header_row:
-            header_td = header_row.find_all('td', class_='right')
-            # Берём последнюю ячейку и получаем текст
-            value = header_td[-1].get_text(strip=True).replace('&nbsp;', '').replace(' ', '')
+                # Проходим по всем следующим строкам, пока не найдем "Итого по разделу 1"
+                while current_row and not found_total:
+                    current_row = current_row.find_next_sibling('tr')
+                    if current_row:
+                        # Проверяем, содержит ли текущая строка "Итого по разделу 1"
+                        total_td = current_row.find('td', string=search_string_2_period)
+                        if total_td:
+                            # Нашли строку с итогом, извлекаем числовые ячейки
+                            numeric_cells = current_row.find_all('td', class_='right')
+                            if numeric_cells:
+                                value = (numeric_cells[-1].get_text(strip=True).replace('&nbsp;', '').
+                                         replace(' ', '').replace('\xa0', ''))
+                            found_total = True
 
     return value
+
+
+date_from_data = ''
+for el in data:
+    date_from_data = el['date']
+    url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_from_data
+    response = session.get(url_102, headers=headers)
+    soup_102 = BeautifulSoup(response.text, "html.parser")
+    el['x5'] = search_for_102(soup_102, date_from_data, 'Раздел 1. Процентные расходы', 'Итого по разделу 1', "Раздел 1. Процентные расходы")
+    el['x6'] = search_for_102(soup_102, date_from_data, 'Раздел 1. Процентные доходы', 'Итого по разделу 1', "Раздел 1. Процентные доходы")
+    if date_from_data >= '2016-12-01':
+        el['y'] = search_for_102_y(soup_102, '1. Финансовый результат после налогообложения')
+    elif date_from_data >= '2009-01-01':
+        el['y'] = search_for_102_y(soup_102, 'Раздел 1. Финансовый результат после налогообложения')
+    else:
+        el['y'] = search_for_102_y(soup_102, 'Итого результат по отчету')
+    print(data)
+
+
+def clean_number(value):
+    """Очищает число от форматирования и преобразует в int"""
+    if isinstance(value, str):
+        # Удаляем все нецифровые символы кроме минуса
+        cleaned = ''.join(c for c in value if c.isdigit() or c == '-')
+        return int(cleaned) if cleaned else 0
+    return value
+
+
+def prepare_data_for_excel(data):
+    """Подготавливает данные для записи в Excel"""
+    excel_data = []
+
+    for item in data:
+        # Преобразуем дату в формат с временем
+        period_number = f"{item['date']} 00:00:00"
+
+        # Очищаем числовые значения
+        cleaned_item = {
+            'period_number': period_number,
+            'y': clean_number(item['y']),
+            'x_1': clean_number(item['x1']),
+            'x_2': clean_number(item['x2']),
+            'x_3': clean_number(item['x3']),
+            'x_4': clean_number(item['x4']),
+            'x_5': clean_number(item['x5']),
+            'x_6': clean_number(item['x6']),
+            'x_7': clean_number(item['x7']),
+            'x_8': clean_number(item['x8']),
+            'x_9': clean_number(item['x9'])
+        }
+        excel_data.append(cleaned_item)
+
+    return excel_data
+
+
+# Подготавливаем данные
+excel_ready_data = prepare_data_for_excel(data)
+
+# Создаем DataFrame
+df = pd.DataFrame(excel_ready_data)
+
+# Устанавливаем правильный порядок колонок как в примере
+column_order = ['period_number', 'y', 'x_1', 'x_2', 'x_3', 'x_4', 'x_5', 'x_6', 'x_7', 'x_8', 'x_9']
+df = df[column_order]
+
+# Записываем в Excel файл
+with pd.ExcelWriter('bank.xlsx', engine='openpyxl') as writer:
+    df.to_excel(writer, sheet_name='Лист1', index=False)
+
+    # Получаем workbook и worksheet для дополнительного форматирования
+    workbook = writer.book
+    worksheet = writer.sheets['Лист1']
+
+    # Автоподбор ширины колонок
+    for column in worksheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        worksheet.column_dimensions[column_letter].width = adjusted_width
+
+print("Данные успешно записаны в bank.xlsx")
+
 

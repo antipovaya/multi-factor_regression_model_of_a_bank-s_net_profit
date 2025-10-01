@@ -17,24 +17,41 @@ url_102 = url + '/banking_sector/credit/coinfo/f102?regnum=354&dt=' + date_102
 
 response = session.get(url_102, headers=headers)
 soup_102 = BeautifulSoup(response.text, "html.parser")
+s = '1. Финансовый результат после налогообложения'
 
+def search_for_102_y(soup_102, date_from_data, search_string):
+    value = 0
+    value_positive = 0
+    value_negative = 0
 
+    if soup_102.find_all('tr'):
+            # Находим строку с заголовком раздела
+            # 1. Финансовый результат после налогообложения
+        header_row = soup_102.find('td', string=search_string)
+        if header_row:
+            print(header_row)
+                # Переходим к родительской строке и затем к следующей строке
+            header_tr = header_row.find_parent('tr')
+            if header_tr:
+                next_row = header_tr.find_next_sibling('tr')
+                if next_row:
+                        # Извлекаем числовое значение из последней ячейки
+                    cells = next_row.find_all('td', class_='right')
+                    if cells:
+                        last_cell = cells[-1]
+                        if last_cell.text.strip():
+                                # Очищаем текст от форматирования
+                            value_positive = int(last_cell.text.replace('&nbsp;', '').replace(' ', '').replace('\xa0', ''))
+                    next_next_row = next_row.find_next_sibling('tr')
+                    if next_next_row:
+                        cells = next_next_row.find_all('td', class_='right')
+                        if cells:
+                            last_cell = cells[-1]
+                            if last_cell.text.strip():
+                                    # Очищаем текст от форматирования
+                                value_negative = int(last_cell.text.replace('&nbsp;', '').replace(' ', '').replace(
+                                        '\xa0', ''))
+                                value = value_positive - value_negative
+    return value
 
-target_td = soup_102.find('td', string='Итого по разделу 1')
-if target_td:
-    print(target_td, date_102, 'target_td')
-    header_row = target_td.parent
-
-else:
-    print("не найдено", date_102)
-    # # Метод.parent в BeautifulSoup возвращает родительский элемент текущего тега.
-    # # soup.find('td', class_='hover', string='Итого по разделу 1') - находит элемент < td > с нужным текстом
-    # # .parent - поднимается на один уровень вверх по дереву к родительскому элементу
-    # # Извлекаем все числовые ячейки в строке
-if header_row:
-    header_td = header_row.find_all('td', class_='right')
-    # Берём последнюю ячейку и получаем текст
-    last_cell = header_td[-1].get_text(strip=True).replace('&nbsp;', '').replace(' ', '')
-    print(last_cell, date_102)
-
-print('2022-12-01' >= '2022-01-01')
+print(search_for_102_y(soup_102,date_102,s))
